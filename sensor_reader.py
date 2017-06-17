@@ -88,7 +88,7 @@ try:
     reader.start()
     while True:
         item = queue.get()
-        if (item != null)
+        if (item is not None):
             print "something was put in the queue: " + item
             f = open("registered_blinks.csv", "a+")
             utcTime = str(datetime.datetime.utcnow().isoformat())
