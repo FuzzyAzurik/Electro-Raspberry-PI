@@ -6,6 +6,7 @@
 
 from threading import Thread
 import time
+import datetime
 import os
 import RPi.GPIO as GPIO
 from Queue import Queue
@@ -29,19 +30,23 @@ class SensorReader(Thread):
         self.lightState = "dark"
 
     def saveReading(self, reading):
+        # remove old reading from array, if avaiable 
         if (self.readingsLength != 0):
             self.readingsSum -= self.readings[self.readingIdx]
-        
+        # overwrite old reading with new
         self.readings[self.readingIdx] = reading
+        # add new reading to sum
+        self.readingsSum += self.readings[self.readingIdx]
         
+        # count up length (if not reached maxLength)
         if (self.readingsLength < self.maxLength):
             self.readingsLength += 1
 
-        self.readingsSum += self.readings[self.readingIdx]
-        
         if (self.readingIdx == self.maxLength - 1):
+            # reset index if reached max
             self.readingIdx = 0
         else:
+            # increase index by one
             self.readingIdx += 1
 
     def run(self):
@@ -51,12 +56,13 @@ class SensorReader(Thread):
         while True:
             reading = self.readSensor()
             print "New reading: " + str(reading)
-            if self.readingsLength != 0:
+            if (self.readingsLength != 0):
                 avgReading = (self.readingsSum / self.readingsLength)
                 newReadingRatio = avgReading / reading
-                if newReadingRatio > self.threshold:
-                    if self.lightState != "light":
+                if (newReadingRatio > self.threshold):
+                    if (self.lightState != "light"):
                         print "BLINK!!!!"
+                        queue.put("blink")
                         self.lightState = "light"
                 else:
                     self.lightState = "dark"
@@ -81,7 +87,14 @@ try:
     reader.daemon = True
     reader.start()
     while True:
-        time.sleep(1)
+        item = queue.get()
+        if (item != null)
+            print "something was put in the queue: " + item
+            f = open("registered_blinks.csv", "a+")
+            utcTime = str(datetime.datetime.utcnow().isoformat())
+            f.write("blink, %s\n" %(utcTime))
+            f.close()
+        time.sleep(5)
 except KeyboardInterrupt:
     pass
 finally:
