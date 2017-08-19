@@ -4,43 +4,41 @@
 # Must be used with GPIO 0.3.1a or later - earlier verions
 # are not fast enough!
 
+from __future__ import division
 from threading import Thread
+from model.reading import Reading
 import time
-import datetime
-import os
 import RPi.GPIO as GPIO
-from Queue import Queue
+import queue
+import logging
 
+logging.basicConfig(level=logging.DEBUG,format='[%(levelname)s] (%(threadName)-10s) %(message)s',)
 
-DEBUG = 1
+DEBUG = 0
 GPIO.setmode(GPIO.BCM)
-queue = Queue(10)
 
 class SensorReader(Thread):
-    def __init__(self, pin, threshold):
-        super(SensorReader, self).__init__()
-        print "Sensor constructor called"
+    RCpin = 0
+    threshold = 0.0
+    maxLength = 3
+    readingLimit = 15000
+    readings = [readingLimit] * maxLength
+    readingsSum = readingLimit * maxLength
+    readingIdx = 0
+    isBlinking = False
+
+    def __init__(self, pin, threshold, name):
+        super(SensorReader, self).__init__(name = name)
         self.RCpin = pin
-        self.readings = [0,0,0,0,0]
-        self.readingsSum = 0
-        self.readingIdx = 0
         self.threshold = threshold
-        self.maxLength = 5
-        self.readingsLength = 0
-        self.lightState = "dark"
 
     def saveReading(self, reading):
-        # remove old reading from array, if avaiable 
-        if (self.readingsLength != 0):
-            self.readingsSum -= self.readings[self.readingIdx]
+        # remove old reading from array 
+        self.readingsSum -= self.readings[self.readingIdx]
         # overwrite old reading with new
         self.readings[self.readingIdx] = reading
         # add new reading to sum
-        self.readingsSum += self.readings[self.readingIdx]
-        
-        # count up length (if not reached maxLength)
-        if (self.readingsLength < self.maxLength):
-            self.readingsLength += 1
+        self.readingsSum += self.readings[self.readingIdx]        
 
         if (self.readingIdx == self.maxLength - 1):
             # reset index if reached max
@@ -49,53 +47,32 @@ class SensorReader(Thread):
             # increase index by one
             self.readingIdx += 1
 
-    def run(self):
-        print "Starting readings"
-        global queue
-        
-        while True:
-            reading = self.readSensor()
-            print "New reading: " + str(reading)
-            if (self.readingsLength != 0):
-                avgReading = (self.readingsSum / self.readingsLength)
-                newReadingRatio = avgReading / reading
-                if (newReadingRatio > self.threshold):
-                    if (self.lightState != "light"):
-                        print "BLINK!!!!"
-                        queue.put("blink")
-                        self.lightState = "light"
-                else:
-                    self.lightState = "dark"
-                print "avgReading = " + str(avgReading) + " newReadingRatio = %.2f" % (newReadingRatio)
-            else:
-                print "array is empty"
-            print "array: " + str(self.readings)
-            self.saveReading(reading)
-
     def readSensor(self):
         reading = 0
         GPIO.setup(self.RCpin, GPIO.OUT)
         GPIO.output(self.RCpin, GPIO.LOW)
         time.sleep(0.1)
+
         GPIO.setup(self.RCpin, GPIO.IN)
         # This takes about 1 millisecond per loop cycle
-        while (GPIO.input(self.RCpin) == GPIO.LOW and reading < 15000):
+        while (GPIO.input(self.RCpin) == GPIO.LOW and reading < self.readingLimit):
                 reading += 1
-        return reading
-try:
-    reader = SensorReader(27, 1.25)
-    reader.daemon = True
-    reader.start()
-    while True:
-        item = queue.get()
-        if (item is not None):
-            print "something was put in the queue: " + item
-            f = open("registered_blinks.csv", "a+")
-            utcTime = str(datetime.datetime.utcnow().isoformat())
-            f.write("blink, %s\n" %(utcTime))
-            f.close()
-        time.sleep(5)
-except KeyboardInterrupt:
-    pass
-finally:
-    GPIO.cleanup()
+        return reading         
+
+    def run(self):
+        while True:
+            reading = self.readSensor()
+            avgReading = (self.readingsSum / self.maxLength)
+            readingRatio = avgReading / reading
+            # logging.debug("New reading: %d, avgReading = %.2f, readingRatio = %.2f" %(reading, avgReading, readingRatio))
+            if (readingRatio > self.threshold):
+                if (not self.isBlinking):
+                    logging.debug("Blink!")
+                    readingItem = Reading(reading, readingRatio)
+                    queue.put(readingItem)
+                    self.isBlinking = True
+            else:
+                self.isBlinking = False
+                self.saveReading(reading)
+
+     
