@@ -29,7 +29,6 @@ class SensorReader(Thread):
 
     def __init__(self, pin, threshold, name):
         super(SensorReader, self).__init__(name = name)
-        logging.debug("Sensor constructor called")
         self.RCpin = pin
         self.threshold = threshold
 
@@ -61,7 +60,6 @@ class SensorReader(Thread):
         return reading         
 
     def run(self):
-        logging.debug("Starting readings")
         while True:
             reading = self.readSensor()
             avgReading = (self.readingsSum / self.maxLength)

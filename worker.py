@@ -22,8 +22,12 @@ class Worker(Thread):
         while True:
             item = queue.get()
             if (item is not None):
-                print(item)
-                wasSuccessful = self.webTarget.postReadingItem(item)
-                if (not wasSuccessful):
+                try:
+                    wasSuccessful = self.webTarget.postReadingItem(item)
+                    if (not wasSuccessful):
+                        logging.error("Unable to post to endpoint, putting reading back to queue")
+                        queue.put(item)
+                except Exception as e:
+                    logging.error("Unable to post to endpoint, putting reading back to queue")
                     queue.put(item)
         

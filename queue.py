@@ -11,4 +11,6 @@ def put(item):
     queue.put(item)
 
 def get():
-    return queue.get()        
+    item = queue.get()
+    logging.debug("retrieving Item from the queue %s" %(item))
+    return item        
